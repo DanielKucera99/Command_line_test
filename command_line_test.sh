@@ -15,10 +15,47 @@ function menu_header()
 	echo "My Command Line Test"
 }
 
+function test_menu()
+{
+	echo "Test menu"
+}
 
 function sign_in()
 {
 	menu_header
+
+	local username
+	local pass
+	local salt
+	local hashed_pass
+
+	echo "Sign In Screen"
+	echo ""
+	while true
+	do
+		echo "Please enter your"
+		echo ""
+		read -p "Username: " username
+		if grep -m 1 -o -q "^$username[^,]*" $credentials_dir #Checking whether the username is in the credentials file
+		then
+			while true
+			do
+			salt=$(grep "^$username," "$credentials_dir" | cut -d',' -f3) #Searching for the salt that belongs to the user
+			read -s -p "Password: " pass
+				hashed_pass=$(openssl passwd -6 -salt "$salt" "$pass") #Hashing the pass the same way the sign up did
+				if grep  "^$username," "$credentials_dir" | cut -d',' -f2 | grep -q "$hashed_pass" #Testing whether the passes match
+				then
+					test_menu
+				else
+					echo ""
+					echo -e "\033[31mInvalid password!!!\033[0m"
+				fi
+			done
+		else
+			echo -e "\033[31mUsername $username does not exists!!!\033[0m"
+			echo ""
+		fi
+	done
 }
 
 function sign_up()
@@ -26,7 +63,10 @@ function sign_up()
 
 	menu_header
 
-	salt=$(openssl rand -hex 16) #Random salt
+	local username
+	local pass
+	local hashed_pass
+	local salt=$(openssl rand -hex 16) #Random salt
 
 	echo "Sign Up Screen"
 	echo ""
