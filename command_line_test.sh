@@ -1,9 +1,18 @@
 #!/bin/bash
 
 #The project's directory
-dir=~/"ECEP/LinuxSystems/Projects/"
+dir=~/"ECEP/LinuxSystems/Projects/.TestData/"
 credentials_file=.user_credentials.csv #File for credentials
-credentials_dir=$dir$credentials_file #Path to that file
+credentials_dir=$dir$credentials_file #Path to the credentials file
+question_bank_file=.question_bank.csv #File for the questions
+question_bank_dir=$dir$question_bank_file #Path to the questions file
+
+
+	if [ ! -d "$dir" ] #If The directory does not exist then it's created
+	then
+		mkdir -p $dir
+	fi
+
 
 	if [ ! -f $credentials_dir ] #If the file does not exist then it's created
 	then
@@ -15,9 +24,82 @@ function menu_header()
 	echo "My Command Line Test"
 }
 
+
+function test_screen()
+{
+	local username=$1 #Logged user's name
+	local user_file="${username}_answer_file.csv" #File for user's answers
+	local bak_file=".${username}_answer_file.bak" #Backup file for user's answers
+	local user_file_dir=$credentials_dir$user_file #Path to the answers file
+	local bak_file_dir=$credentials_dir$bak_file #Path to the backup file
+	local question_number=1
+
+	if [ ! -f $user_file_dir ] 
+	then
+		touch $user_file_dir
+	fi
+
+	if [ ! -f $bak_file_dir ]
+	then
+		touch $bak_file_dir
+	fi
+
+	echo ""
+	menu_header
+
+	IFS=$'\n' #Condition for reading the data as the whole lines
+	shuffled_lines=($(sort -R "$question_bank_dir")) #Array with the random sort of the questions
+
+	for line in "${shuffled_lines[@]}" #A loop for reading the lines
+	do
+		IFS=',' read -ra words <<< "$line"
+		echo ""
+		echo -n "$question_number. "
+		((question_number++)) #Increse of the number of the question
+		for word in "${words[@]}" #Loop for outputting the question and the option each on the new line
+		do
+			echo "$word"
+		done
+
+		read -n 1 -r -p "Choose your option: " answer #reading the answer of the user
+	done
+}
+
 function test_menu()
 {
-	echo "Test menu"
+	local option
+	local username=$1
+
+	echo ""
+	menu_header
+
+        while true
+        do
+                echo ""
+                echo "1. Take a test"
+                echo "2. View a test"
+                echo "3. Exit"
+
+                echo ""
+                if read -p "Please choose your option: "  option
+                then
+
+                        if [[ "$option" -eq 1 ]]
+                        then
+                                test_screen "$username"
+                        elif [[ "$option" -eq 2 ]]
+                        then
+                               	view_test_screen "$username"
+                        elif [[ "$option" -eq 3 ]]
+                        then
+                                exit 0
+                        else
+                                echo ""
+                                echo "Invalid input!"
+                                echo ""
+                        fi
+                fi
+        done
 }
 
 function sign_in()
@@ -45,7 +127,7 @@ function sign_in()
 				hashed_pass=$(openssl passwd -6 -salt "$salt" "$pass") #Hashing the pass the same way the sign up did
 				if grep  "^$username," "$credentials_dir" | cut -d',' -f2 | grep -q "$hashed_pass" #Testing whether the passes match
 				then
-					test_menu
+					test_menu "$username"
 				else
 					echo ""
 					echo -e "\033[31mInvalid password!!!\033[0m"
@@ -135,49 +217,44 @@ function sign_up()
 
 function main()
 {
-menu_header
+	local option
 
-if [ ! -d "$dir" ]
-then
-	mkdir -p $dir
-	echo "Dir created"
-fi
+	menu_header
 
-while true
-do
-echo "Please choose the option below"
+	while true
+	do
+		echo "Please choose the option below"
 
-echo ""
-echo "1. Sign in"
-echo "2. Sign up"
-echo "3. Exit"
-
-echo ""
-echo "Note: Script Exit Timeout is set"
-echo ""
-if read -p "Please choose your option: " -t 10 option
-then
-
-	if [[ "$option" -eq 1 ]]
-	then
-		sign_in
-	elif [[ "$option" -eq 2 ]]
-	then
-		sign_up
-	elif [[ "$option" -eq 3 ]]
-	then
-		exit 0
-	else
 		echo ""
-		echo "Invalid input!"
+		echo "1. Sign in"
+		echo "2. Sign up"
+		echo "3. Exit"
+
 		echo ""
-		continue
-	fi
-else
-	echo ""
-	exit 1
-fi
-done
+		echo "Note: Script Exit Timeout is set"
+		echo ""
+		if read -p "Please choose your option: " -t 10 option
+		then
+
+			if [[ "$option" -eq 1 ]]
+			then
+				sign_in
+			elif [[ "$option" -eq 2 ]]
+			then
+				sign_up
+			elif [[ "$option" -eq 3 ]]
+			then
+				exit 0
+			else
+				echo ""
+				echo "Invalid input!"
+				echo ""
+			fi
+		else
+			echo ""
+			exit 1
+		fi
+	done
 }
 
 main
