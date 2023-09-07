@@ -33,8 +33,9 @@ function test_screen()
 	local user_file_dir=$credentials_dir$user_file #Path to the answers file
 	local bak_file_dir=$credentials_dir$bak_file #Path to the backup file
 	local question_number=1
+	local remaining=10
 
-	if [ ! -f $user_file_dir ] 
+	if [ ! -f $user_file_dir ]
 	then
 		touch $user_file_dir
 	fi
@@ -44,25 +45,35 @@ function test_screen()
 		touch $bak_file_dir
 	fi
 
-	echo ""
-	menu_header
-
 	IFS=$'\n' #Condition for reading the data as the whole lines
 	shuffled_lines=($(sort -R "$question_bank_dir")) #Array with the random sort of the questions
 
-	for line in "${shuffled_lines[@]}" #A loop for reading the lines
-	do
-		IFS=',' read -ra words <<< "$line"
-		echo ""
-		echo -n "$question_number. "
-		((question_number++)) #Increse of the number of the question
-		for word in "${words[@]}" #Loop for outputting the question and the option each on the new line
+		for line in "${shuffled_lines[@]}" #A loop for reading the lines
 		do
-			echo "$word"
+			remaining=10 #Resetting the timer at the start of the next question
+			IFS=',' read -ra words <<< "$line" #Reading the lines
+			while [ $remaining -gt 0 ] #The loop for the timer
+			do
+			clear #Clearing the terminal so the counter works
+			menu_header
+			echo -e "Time remaining: $remaining seconds" #Displaying the time left
+			echo ""
+			echo ""
+			echo -n "$question_number. "
+			for word in "${words[@]}" #Loop for outputting the question and the option each on the new line
+			do
+				echo "$word"
+			done
+				echo -ne "\rChoose your option: "
+            			if read -t 1 -n 1 -r -s answer
+				then
+					break #Breaking the loop therefore moving to another question
+				fi
+				remaining=$((remaining - 1)) #Decreasing the time left
+        		done
+			((question_number++)) #Increse of the number of the question
 		done
 
-		read -n 1 -r -p "Choose your option: " answer #reading the answer of the user
-	done
 }
 
 function test_menu()
