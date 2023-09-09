@@ -7,12 +7,10 @@ credentials_dir=$dir$credentials_file #Path to the credentials file
 question_bank_file=.question_bank.csv #File for the questions
 question_bank_dir=$dir$question_bank_file #Path to the questions file
 
-
 	if [ ! -d "$dir" ] #If The directory does not exist then it's created
 	then
 		mkdir -p $dir
 	fi
-
 
 	if [ ! -f $credentials_dir ] #If the file does not exist then it's created
 	then
@@ -24,16 +22,13 @@ function menu_header()
 	echo "My Command Line Test"
 }
 
-
-function test_screen()
+function answer_file_creation()
 {
-	local username=$1 #Logged user's name
+	local username=$1
 	local user_file="${username}_answer_file.csv" #File for user's answers
 	local bak_file=".${username}_answer_file.bak" #Backup file for user's answers
-	local user_file_dir=$credentials_dir$user_file #Path to the answers file
-	local bak_file_dir=$credentials_dir$bak_file #Path to the backup file
-	local question_number=1
-	local remaining=10
+	local user_file_dir=$dir$user_file #Path to the answers file
+	local bak_file_dir=$dir$bak_file #Path to the backup file
 
 	if [ ! -f $user_file_dir ]
 	then
@@ -42,8 +37,31 @@ function test_screen()
 
 	if [ ! -f $bak_file_dir ]
 	then
+
 		touch $bak_file_dir
 	fi
+
+	local paths=("$user_file_dir" "$bak_file_dir")
+
+	echo "${paths[@]}"
+}
+
+function test_screen()
+{
+	local username=$1 #Logged user's name
+
+	local paths=($(answer_file_creation "$username")) #Creation of the backup and answer files
+	local question_number=1
+	local remaining=10
+	local answer_file="${paths[0]}"
+	local bak_file="${paths[1]}"
+
+	if [ -s "$answer_file" ] #If the answer file contains the answers from the previous try, copy it into the backup file
+	then
+		cat "$answer_file" > "$bak_file"
+	fi
+
+	truncate -s 0 "$answer_file" #If the answer file contains the answers from the previous try then it's cleared
 
 	IFS=$'\n' #Condition for reading the data as the whole lines
 	shuffled_lines=($(sort -R "$question_bank_dir")) #Array with the random sort of the questions
@@ -60,14 +78,36 @@ function test_screen()
 			echo ""
 			echo ""
 			echo -n "$question_number. "
+			if [ $remaining -eq 10 ] #Condition for writing the string only once per question
+			then
+				echo "$question_number." >> "${paths[0]}" #Writing the question number to the file
+			fi
 			for word in "${words[@]}" #Loop for outputting the question and the option each on the new line
 			do
 				echo "$word"
+				if [ $remaining -eq 10 ] #Same as above
+				then
+				echo "$word" >> "${paths[0]}" #Writing the question and the answers to the file
+				fi
 			done
 				echo -ne "\rChoose your option: "
-            			if read -t 1 -n 1 -r -s answer
+            			if read -t 1 -n 1 -r -s answer #Reading the answer
 				then
-					break #Breaking the loop therefore moving to another question
+					local time_of_answer=$((10 - remaining)) #The time within the user answered
+					local answer_string=" -> You answered within $time_of_answer seconds" #String that will be appended to the answer in the file
+					local matching_lines=$(grep -nF "[$answer]" "$answer_file" | cut -d':' -f1) #Searching for the lines containing the answer
+					local last_line=""
+					for line_number in $matching_lines #Loop for finding the last line in the containing the answer -> the last line belongs to the current question
+					do
+						last_line="$line_number"
+					done
+
+					if [ -n "$last_line" ] #Check whether is last line is not empty
+					then
+   						sed -i "${last_line}s/$/ $answer_string/" "$answer_file" #Appending the string to the answer in the answer file
+					fi
+
+					break  #Breaking the loop therefore moving to another question
 				fi
 				remaining=$((remaining - 1)) #Decreasing the time left
         		done
