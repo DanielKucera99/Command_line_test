@@ -30,31 +30,60 @@ function answer_file_creation()
 	local user_file_dir=$dir$user_file #Path to the answers file
 	local bak_file_dir=$dir$bak_file #Path to the backup file
 
-	if [ ! -f $user_file_dir ]
+	if [ ! -f $user_file_dir ] #Creation of the answer file
 	then
 		touch $user_file_dir
 	fi
 
-	if [ ! -f $bak_file_dir ]
+	if [ ! -f $bak_file_dir ] #Creation of the backup file
 	then
 
 		touch $bak_file_dir
 	fi
+}
 
-	local paths=("$user_file_dir" "$bak_file_dir")
+function view_test_screen()
+{
+	local username=$1
+	local answer_file=$dir"${username}_answer_file.csv"
+	local answer_string="answer"
+	local red_color="\e[31m"
+	local reset_color="\e[0m"
 
-	echo "${paths[@]}"
+	clear
+	menu_header
+
+	if [ ! -s "$answer_file" ] #If the answer file is empty it means that the user didn't take a test yet
+	then
+		echo -e  "\nYou didn't take the test yet"
+		read -n 1 -s -p "Press any key to go back: " key
+	else
+
+		while IFS= read -r file_line #Loop for displaying the lines from the answer file
+		do
+    			if [[ "$file_line" == *"$answer_string"* ]] #If the line contains the string than it is colored in red
+			then
+        			echo -e "${red_color}${file_line}${reset_color}" #The red print
+    			else
+        			echo "$file_line" #The regular print
+    			fi
+		done < "$answer_file"
+
+		echo ""
+		read -n 1 -s -p "More: Hit any key to continue "
+	fi
 }
 
 function test_screen()
 {
 	local username=$1 #Logged user's name
 
-	local paths=($(answer_file_creation "$username")) #Creation of the backup and answer files
+	answer_file_creation "$username" #Creation of the backup and answer files
 	local question_number=1
 	local remaining=10
-	local answer_file="${paths[0]}"
-	local bak_file="${paths[1]}"
+	local answer_file=$dir"${username}_answer_file.csv"
+	local bak_file=$dir".${username}_answer_file.bak"
+
 
 	if [ -s "$answer_file" ] #If the answer file contains the answers from the previous try, copy it into the backup file
 	then
@@ -80,40 +109,49 @@ function test_screen()
 			echo -n "$question_number. "
 			if [ $remaining -eq 10 ] #Condition for writing the string only once per question
 			then
-				echo "$question_number." >> "${paths[0]}" #Writing the question number to the file
+				echo "$question_number." >> "$answer_file" #Writing the question number to the file
 			fi
 			for word in "${words[@]}" #Loop for outputting the question and the option each on the new line
 			do
 				echo "$word"
 				if [ $remaining -eq 10 ] #Same as above
 				then
-				echo "$word" >> "${paths[0]}" #Writing the question and the answers to the file
+				echo "$word" >> "$answer_file" #Writing the question and the answers to the file
 				fi
 			done
 				echo -ne "\rChoose your option: "
             			if read -t 1 -n 1 -r -s answer #Reading the answer
 				then
-					local time_of_answer=$((10 - remaining)) #The time within the user answered
-					local answer_string=" -> You answered within $time_of_answer seconds" #String that will be appended to the answer in the file
-					local matching_lines=$(grep -nF "[$answer]" "$answer_file" | cut -d':' -f1) #Searching for the lines containing the answer
-					local last_line=""
-					for line_number in $matching_lines #Loop for finding the last line in the containing the answer -> the last line belongs to the current question
-					do
-						last_line="$line_number"
-					done
+					case $answer in
+					"a" | "b" | "c" | "d")
+						local time_of_answer=$((10 - remaining)) #The time within the user answered
+						local answer_string=" -> You answered within $time_of_answer seconds" #String that will be appended to the answer in the file
+						local matching_lines=$(grep -nF "[$answer]" "$answer_file" | cut -d':' -f1) #Searching for the lines containing the answer
+						local last_line=""
+						for line_number in $matching_lines #Loop for finding the last line in the containing the answer -> the last line belongs to the current question
+						do
+							last_line="$line_number"
+						done
 
-					if [ -n "$last_line" ] #Check whether is last line is not empty
-					then
-   						sed -i "${last_line}s/$/ $answer_string/" "$answer_file" #Appending the string to the answer in the answer file
-					fi
-
+						if [ -n "$last_line" ] #Check whether is last line is not empty
+						then
+   							sed -i "${last_line}s/$/ $answer_string/" "$answer_file" #Appending the string to the answer in the answer file
+						fi
+						;;
+					*)
+						echo -e "\nYour answer is invalid!\n" >> "$answer_file"
+						;;
+					esac
 					break  #Breaking the loop therefore moving to another question
+				fi
+				if [ $((remaining - 1)) -eq 0 ]
+				then
+				echo -e "\nYou didn't answer this question!\n" >> "$answer_file"
 				fi
 				remaining=$((remaining - 1)) #Decreasing the time left
         		done
 			((question_number++)) #Increse of the number of the question
 		done
-
 }
 
 function test_menu()
@@ -121,18 +159,17 @@ function test_menu()
 	local option
 	local username=$1
 
-	echo ""
-	menu_header
-
         while true
         do
+		clear
+		menu_header
                 echo ""
                 echo "1. Take a test"
                 echo "2. View a test"
                 echo "3. Exit"
 
                 echo ""
-                if read -p "Please choose your option: "  option
+                if read -p "Please choose your option: "  option #Reading the input of the logged user
                 then
 
                         if [[ "$option" -eq 1 ]]
@@ -143,7 +180,7 @@ function test_menu()
                                	view_test_screen "$username"
                         elif [[ "$option" -eq 3 ]]
                         then
-                                exit 0
+                                break
                         else
                                 echo ""
                                 echo "Invalid input!"
@@ -155,6 +192,7 @@ function test_menu()
 
 function sign_in()
 {
+	clear
 	menu_header
 
 	local username
@@ -169,7 +207,7 @@ function sign_in()
 		echo "Please enter your"
 		echo ""
 		read -p "Username: " username
-		if grep -m 1 -o -q "^$username[^,]*" $credentials_dir #Checking whether the username is in the credentials file
+		if grep -m 1 -o -q "\\b$username\\b" "$credentials_dir" #Checking whether the username is in the credentials file
 		then
 			while true
 			do
@@ -179,6 +217,7 @@ function sign_in()
 				if grep  "^$username," "$credentials_dir" | cut -d',' -f2 | grep -q "$hashed_pass" #Testing whether the passes match
 				then
 					test_menu "$username"
+					break
 				else
 					echo ""
 					echo -e "\033[31mInvalid password!!!\033[0m"
@@ -188,12 +227,13 @@ function sign_in()
 			echo -e "\033[31mUsername $username does not exists!!!\033[0m"
 			echo ""
 		fi
+		break
 	done
 }
 
 function sign_up()
 {
-
+	clear
 	menu_header
 
 	local username
@@ -270,6 +310,7 @@ function main()
 {
 	local option
 
+	clear
 	menu_header
 
 	while true
@@ -284,7 +325,7 @@ function main()
 		echo ""
 		echo "Note: Script Exit Timeout is set"
 		echo ""
-		if read -p "Please choose your option: " -t 10 option
+		if read -p "Please choose your option: " -t 10 option #Reading the input at the start of the program; if it is not answered in 10 seconds, the program closes
 		then
 
 			if [[ "$option" -eq 1 ]]
