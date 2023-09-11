@@ -6,22 +6,28 @@ credentials_file=.user_credentials.csv #File for credentials
 credentials_dir=$dir$credentials_file #Path to the credentials file
 question_bank_file=.question_bank.csv #File for the questions
 question_bank_dir=$dir$question_bank_file #Path to the questions file
+log_file=command_line_test.log
+log_file_dir=$dir$log_file
 
 	if [ ! -d "$dir" ] #If The directory does not exist then it's created
 	then
-		mkdir -p $dir
+		mkdir -p "$dir"
+	fi
+	if [ ! -f "$log_file_dir" ]
+	then
+		touch "$log_file_dir"
 	fi
 
-	if [ ! -f $credentials_dir ] #If the file does not exist then it's created
+	if [ ! -f "$credentials_dir" ] #If the file does not exist then it's created
 	then
-		touch $credentials_dir
+		touch "$credentials_dir"
+		echo "$(date '+%Y-%m-%d %H:%M:%S') - Created ${credentials_file}" >> "$log_file_dir"
 	fi
 
 function menu_header()
 {
 	echo "My Command Line Test"
 }
-
 function answer_file_creation()
 {
 	local username=$1
@@ -33,12 +39,13 @@ function answer_file_creation()
 	if [ ! -f $user_file_dir ] #Creation of the answer file
 	then
 		touch $user_file_dir
+		echo "$(date '+%Y-%m-%d %H:%M:%S') - Created ${user_file_dir}" >> "$log_file_dir"
 	fi
 
 	if [ ! -f $bak_file_dir ] #Creation of the backup file
 	then
-
 		touch $bak_file_dir
+		echo "$(date '+%Y-%m-%d %H:%M:%S') - Created ${bak_file_dir}" >> "$log_file_dir"
 	fi
 }
 
@@ -49,6 +56,8 @@ function view_test_screen()
 	local answer_string="answer"
 	local red_color="\e[31m"
 	local reset_color="\e[0m"
+
+	echo "$(date '+%Y-%m-%d %H:%M:%S') - User ${username} viewed a test" >> "$log_file_dir"
 
 	clear
 	menu_header
@@ -84,10 +93,12 @@ function test_screen()
 	local answer_file=$dir"${username}_answer_file.csv"
 	local bak_file=$dir".${username}_answer_file.bak"
 
+	echo "$(date '+%Y-%m-%d %H:%M:%S') - User ${username} took a test" >> "$log_file_dir"
 
 	if [ -s "$answer_file" ] #If the answer file contains the answers from the previous try, copy it into the backup file
 	then
 		cat "$answer_file" > "$bak_file"
+		echo "$(date '+%Y-%m-%d %H:%M:%S') - Answer file was copied into a backup file" >> "$log_file_dir"
 	fi
 
 	truncate -s 0 "$answer_file" #If the answer file contains the answers from the previous try then it's cleared
@@ -169,7 +180,7 @@ function test_menu()
                 echo "3. Exit"
 
                 echo ""
-                if read -p "Please choose your option: "  option #Reading the input of the logged user
+                if read -n 1 -s -p "Please choose your option: "  option #Reading the input of the logged user
                 then
 
                         if [[ "$option" -eq 1 ]]
@@ -180,11 +191,10 @@ function test_menu()
                                	view_test_screen "$username"
                         elif [[ "$option" -eq 3 ]]
                         then
+				echo "$(date '+%Y-%m-%d %H:%M:%S') - User $username exited" >> "$log_file_dir"
                                 break
                         else
-                                echo ""
-                                echo "Invalid input!"
-                                echo ""
+                                echo -e "\nInvalid input!\n"
                         fi
                 fi
         done
@@ -207,28 +217,39 @@ function sign_in()
 		echo "Please enter your"
 		echo ""
 		read -p "Username: " username
-		if grep -m 1 -o -q "\\b$username\\b" "$credentials_dir" #Checking whether the username is in the credentials file
+
+		local pattern="^[[:alnum:]]+$" #Pattern that contains only alphanumeric characters
+
+		if  [[ $username =~ $pattern ]] #Checking whether provided string contains only alphanum characters
 		then
-			while true
-			do
-			salt=$(grep "^$username," "$credentials_dir" | cut -d',' -f3) #Searching for the salt that belongs to the user
-			read -s -p "Password: " pass
-				hashed_pass=$(openssl passwd -6 -salt "$salt" "$pass") #Hashing the pass the same way the sign up did
-				if grep  "^$username," "$credentials_dir" | cut -d',' -f2 | grep -q "$hashed_pass" #Testing whether the passes match
-				then
-					test_menu "$username"
-					break
-				else
-					echo ""
-					echo -e "\033[31mInvalid password!!!\033[0m"
-				fi
-			done
+			if grep -m 1 -o -q "\\b$username\\b" "$credentials_dir" #Checking whether the username is in the credentials file
+			then
+				while true
+				do
+				salt=$(grep "^$username," "$credentials_dir" | cut -d',' -f3) #Searching for the salt that belongs to the user
+				read -s -p "Password: " pass
+					hashed_pass=$(openssl passwd -6 -salt "$salt" "$pass") #Hashing the pass the same way the sign up did
+					if grep  "^$username," "$credentials_dir" | cut -d',' -f2 | grep -q "$hashed_pass" #Testing whether the passes match
+					then
+						echo "$(date '+%Y-%m-%d %H:%M:%S') - User $username succesully signed in" >> "$log_file_dir"
+						test_menu "$username"
+						break #Breakinf from the login loop when the test menu is exited
+					else
+						echo ""
+						echo -e "\033[31mInvalid password!!!\033[0m"
+					fi
+				done
+			else
+				echo -e "\033[31mUsername $username does not exists!!!\033[0m"
+				echo ""
+			fi
+			break #If user exits then it's brought back to the menu
 		else
 			echo -e "\033[31mUsername $username does not exists!!!\033[0m"
-			echo ""
+                        echo ""
 		fi
-		break
 	done
+
 }
 
 function sign_up()
@@ -246,7 +267,7 @@ function sign_up()
 	while true #Loop for the case that the username is wrong
 	do
 		read -p "Please choose your username: " username
-		pattern="^[[:alnum:]]+$" #Condition for only alphanumeric username
+		local pattern="^[[:alnum:]]+$" #Condition for only alphanumeric username
 
 		if [[ $username =~ $pattern ]]
 		then
@@ -258,7 +279,7 @@ function sign_up()
 				while true #Loop for the case the password is worng
 				do
 					read -s -p "Please enter your password: " pass
-					if [ ${#pass} -lt 8 ] #Length of the pass
+					if [ ${#pass} -gt 7 ] #Length of the pass
 					then
 						if [[ "$pass" =~ [0-9] ]] #Contains number
 						then
@@ -272,35 +293,30 @@ function sign_up()
 									echo "$username,$hashed_pass,$salt" >> $credentials_dir #Appending to a file
 									echo ""
 									echo ""
-									read -n 1 -s -r -p "Registration sucessfull. Please hit any key to continue" key
+									read -n 1 -s -r -p "Registration sucessfull. Please hit any key to continue " key
 									if [ "$key" ]
 									then
 										echo ""
 										break #Break from the pass loop
 									fi
 								else
-									echo ""
-									echo "The passwords do not match!"
+									echo -e "\nThe passwords do not match!"
 								fi
 							else
-								echo ""
-								echo "The password must contain a special symbol"
+								echo -e "\nThe password must contain a special symbol"
 							fi
 						else
-							echo ""
-							echo "The password must contain a number"
+							echo -e "\nThe password must contain a number"
 						fi
 					else
-						echo ""
-						echo "The password must be at least 8 characters long"
+						echo -e "\nThe password must be at least 8 characters long"
 					fi
 				done #End of the pass loop
+				echo "$(date '+%Y-%m-%d %H:%M:%S') - User ${username} created" >> "$log_file_dir"
 				break #Break from the user loop
 			fi
 		else
-			echo ""
-			echo "The username must contain only alphanumeric symbols!"
-			echo ""
+			echo -e "\nThe username must contain only alphanumeric symbols!\n"
 		fi
 
 	done #End of the user loop
@@ -310,11 +326,11 @@ function main()
 {
 	local option
 
-	clear
-	menu_header
-
+	echo "$(date '+%Y-%m-%d %H:%M:%S') - Script invoked" >> "$log_file_dir"
 	while true
 	do
+		clear
+		menu_header
 		echo "Please choose the option below"
 
 		echo ""
@@ -322,10 +338,9 @@ function main()
 		echo "2. Sign up"
 		echo "3. Exit"
 
-		echo ""
-		echo "Note: Script Exit Timeout is set"
-		echo ""
-		if read -p "Please choose your option: " -t 10 option #Reading the input at the start of the program; if it is not answered in 10 seconds, the program closes
+		echo -e "\nNote: Script Exit Timeout is set\n"
+
+		if read -n 1 -s -p "Please choose your option: " -t 10 option #Reading the input at the start of the program; if it is not answered in 10 seconds, the program closes
 		then
 
 			if [[ "$option" -eq 1 ]]
@@ -336,14 +351,16 @@ function main()
 				sign_up
 			elif [[ "$option" -eq 3 ]]
 			then
+				echo ""
+				echo "$(date '+%Y-%m-%d %H:%M:%S') - Script exited" >> "$log_file_dir"
+
 				exit 0
 			else
-				echo ""
-				echo "Invalid input!"
-				echo ""
+				echo -e "\nInvalid input!\n"
 			fi
 		else
 			echo ""
+			echo "$(date '+%Y-%m-%d %H:%M:%S') - Script timed out!!!" >> "$log_file_dir"
 			exit 1
 		fi
 	done
